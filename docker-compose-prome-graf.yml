@@ -1,0 +1,42 @@
+version: '3.7'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml             # Configuration files from the host
+      - ./prometheus_data:/prometheus  # Custom path for Prometheus data storage
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.56
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana_data:/var/lib/grafana  # Custom path for Grafana data storage
+    restart: unless-stopped
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.55
+
+
+networks:
+  monitor-net:
+    name: monitor-net
+    external: true
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

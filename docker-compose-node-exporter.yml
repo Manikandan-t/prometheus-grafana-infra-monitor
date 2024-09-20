@@ -1,0 +1,105 @@
+version: '3.7'
+
+services:
+  node_exporter:
+    #id 1860
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.57
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro    # This mounts the root filesystem of the host into the container
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude="^/(sys|proc|dev|host|etc)($$|/)"'
+
+  dcgm_exporter:
+    #id 12239
+    image: nvidia/dcgm-exporter:latest
+    container_name: dcgm_exporter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "9400:9400"
+    restart: unless-stopped
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.58
+
+  nvidia_smi_exporter:
+    #id 14574
+    image: utkuozdemir/nvidia_gpu_exporter:1.1.0
+    container_name: nvidia_smi_exporter
+    restart: unless-stopped
+    devices:
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia0:/dev/nvidia0
+    volumes:
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi
+    ports:
+      - "9835:9835"
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.59
+
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    ports:
+      # If you have nginx in local with port 80, change the port
+      - "80:80"
+    privileged: true
+    volumes:
+      - ./prometheus/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx_logs:/var/log/nginx  # Log directory mounted
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.61
+
+  mtail:
+    image: dylanmei/mtail:latest
+    container_name: mtail
+    ports:
+      - "3903:3903"
+    user: "root"
+    volumes:
+      - ./nginx_logs:/var/log/nginx  # Nginx logs mounted for mtail to read
+      - ./prometheus:/mtail  # Directory for mtail scripts
+    command: [ "-logs", "/var/log/nginx/access.log", "-progs", "/mtail" ]
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.63
+
+  cadvisor:
+    image: google/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      monitor-net:
+        ipv4_address: 172.20.0.64
+
+networks:
+  monitor-net:
+    name: monitor-net
+    external: true
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
